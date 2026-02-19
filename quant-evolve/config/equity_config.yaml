@@ -1,0 +1,162 @@
+# Equity Market Configuration for QuantEvolve
+# Configuration for evolving trading strategies on equity markets (AAPL, NVDA, AMZN, GOOGL, MSFT, TSLA)
+
+# Inherit from default config and override equity-specific settings
+defaults:
+  - default_config.yaml
+
+# Market-specific settings
+market:
+  type: "equity"
+  name: "US Large Cap Tech Equities"
+  
+# Asset universe
+assets:
+  symbols:
+    - "AAPL"  # Apple Inc.
+    - "NVDA"  # NVIDIA Corporation
+    - "AMZN"  # Amazon.com Inc.
+    - "GOOGL" # Alphabet Inc. Class A
+    - "MSFT"  # Microsoft Corporation
+    - "TSLA"  # Tesla Inc.
+  benchmark: "SPY"  # S&P 500 ETF as benchmark for IR calculation
+  data_source: "data/equities"  # Path to OHLCV data files
+
+# Data split configuration (as per validation experiment)
+data_splits:
+  train:
+    start_date: "2015-08-01"
+    end_date: "2020-07-31"
+    description: "5-year training period"
+  validation:
+    start_date: "2020-08-01"
+    end_date: "2022-07-31"
+    description: "2-year validation period"
+  test:
+    start_date: "2022-08-01"
+    end_date: "2025-07-31"
+    description: "3-year test period (held-out)"
+
+# Evolution settings for equity market
+evolution:
+  generations: 150  # Total generations for equity evolution
+  population_size_per_island: 20  # Strategies per island
+  migration_interval: 10  # Migrate every 10 generations
+  alpha: 0.5  # Parent selection balance (exploitation vs exploration)
+  insight_curation_interval: 50  # Curate insights every 50 generations
+
+# Feature map configuration for equity strategies
+feature_map:
+  dimensions: 6
+  dimensions_list:
+    - name: "strategy_category"
+      type: "binary"
+      bit_length: 8
+      description: "8-bit encoding for strategy families"
+    - name: "trading_frequency"
+      type: "continuous"
+      min: 1  # Daily
+      max: 252  # Yearly
+      bins: 16
+      description: "Average trades per year"
+    - name: "max_drawdown"
+      type: "continuous"
+      min: -1.0  # -100%
+      max: 0.0  # 0%
+      bins: 16
+      description: "Maximum drawdown (negative value)"
+    - name: "sharpe_ratio"
+      type: "continuous"
+      min: -2.0
+      max: 5.0
+      bins: 16
+      description: "Annualized Sharpe ratio"
+    - name: "sortino_ratio"
+      type: "continuous"
+      min: -2.0
+      max: 5.0
+      bins: 16
+      description: "Annualized Sortino ratio"
+    - name: "total_return"
+      type: "continuous"
+      min: -1.0  # -100%
+      max: 10.0  # 1000%
+      bins: 16
+      description: "Cumulative return over period"
+  bins_per_dimension: 16  # Optimal from ablation study
+
+# Island model configuration
+islands:
+  num_islands: 9  # 8 strategy categories + 1 buy-and-hold benchmark
+  topology: "ring"  # Ring topology for migration
+  migration_rate: 0.1  # Top 10% migrate
+  seed_strategies:
+    - "momentum"
+    - "mean_reversion"
+    - "breakout"
+    - "trend_following"
+    - "volatility"
+    - "fundamental"
+    - "sentiment"
+    - "arbitrage"
+    - "buy_and_hold"  # Benchmark island
+
+# Cousin selection configuration (Equation 2)
+cousin_selection:
+  num_best_cousins: 2
+  num_diverse_cousins: 3
+  num_random_cousins: 2
+  total_cousins: 7
+  perturbation_sigma: 1.0  # Standard deviation for continuous dimension perturbation
+  bit_flip_ratio: 0.25  # k_bf = n/4 for category dimension
+
+# Backtesting configuration for equities
+backtesting:
+  engine: "zipline-reloaded"
+  frequency: "daily"
+  commission:
+    model: "PerShare"
+    cost: 0.0075  # $0.0075 per share
+    min_trade_cost: 1.0  # Minimum $1.00 per trade
+  slippage:
+    model: "VolumeShareSlippage"
+    volume_limit: 0.025  # 2.5% of volume
+    price_impact: 0.1  # Quadratic impact coefficient
+  capital_base: 100000  # $100,000 initial capital
+  benchmark: "SPY"
+  
+# Risk constraints for equity strategies
+risk_constraints:
+  max_position_size: 0.25  # Max 25% in single asset
+  max_gross_exposure: 1.0  # Max 100% gross exposure
+  max_net_exposure: 1.0  # Max 100% net exposure (no shorting for long-only)
+  max_turnover: 0.5  # Max 50% daily turnover
+  min_holding_period: 1  # Minimum 1 day holding
+
+# LLM configuration for equity domain
+llm:
+  fast_model: "Qwen3-30B-A3B-Instruct-2507"  # For data agent, coding team
+  reasoning_model: "Qwen3-Next-80B-A3B-Instruct"  # For research agent, evaluation team
+  temperature: 0.7
+  top_p: 0.9
+  max_tokens: 4096
+  domain_knowledge: "equity_markets"
+
+# Output configuration
+output:
+  results_dir: "results/equities"
+  save_feature_maps: true
+  save_strategies: true
+  save_metrics: true
+  save_insights: true
+  checkpoint_interval: 10  # Save checkpoint every 10 generations
+
+# Validation targets (from paper Table 4)
+validation_targets:
+  test_set:
+    sharpe_ratio_min: 1.4  # Target: 1.52
+    combined_return_min: 2.5  # 250% (target)
+    max_drawdown_max: -0.15  # Max -15%
+    information_ratio_min: 0.5
+  baseline_comparison:
+    risk_parity_sharpe: 1.22  # Baseline to beat

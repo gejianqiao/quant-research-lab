@@ -1,0 +1,179 @@
+# Futures Market Configuration for QuantEvolve
+# Optimized for ES (E-mini S&P 500) and NQ (E-mini NASDAQ-100) futures
+
+defaults:
+  - default_config
+
+market:
+  type: "futures"
+  name: "US Equity Index Futures"
+  description: "E-mini S&P 500 and NASDAQ-100 futures contracts"
+
+assets:
+  symbols:
+    - "ES"  # E-mini S&P 500
+    - "NQ"  # E-mini NASDAQ-100
+  benchmark: "ES"  # Use ES as primary benchmark
+  data_path: "data/futures/"
+  contract_roll:
+    method: "volume"  # Roll to highest volume contract
+    roll_days_before: 5  # Days before expiration to roll
+    lookback_days: 30  # Days to analyze for roll decision
+
+data_splits:
+  train:
+    start: "2018-01-01"
+    end: "2021-07-31"
+    description: "Training period (3.5 years)"
+  validation:
+    start: "2021-08-01"
+    end: "2022-07-31"
+    description: "Validation period (1 year)"
+  test:
+    start: "2022-08-01"
+    end: "2024-01-31"
+    description: "Test period (1.5 years)"
+
+evolution:
+  generations: 100  # Fewer generations than equity (faster convergence)
+  population_size: 50  # Strategies per island
+  migration_interval: 10  # Migrate every 10 generations
+  alpha: 0.5  # Parent selection balance (exploitation vs exploration)
+  insight_curation_interval: 50  # Curate insights every 50 generations
+  checkpoint_interval: 10  # Save checkpoint every 10 generations
+  parallel_backtests: 4  # Number of parallel backtest workers
+
+feature_map:
+  dimensions: 6
+  dimensions_list:
+    - name: "strategy_category"
+      type: "binary"
+      bit_length: 8
+      description: "8-bit encoding for strategy families"
+    - name: "trading_frequency"
+      type: "continuous"
+      min: 0.0
+      max: 252.0
+      description: "Average trades per year (0-252 trading days)"
+    - name: "max_drawdown"
+      type: "continuous"
+      min: -1.0
+      max: 0.0
+      description: "Maximum drawdown (-100% to 0%)"
+    - name: "sharpe_ratio"
+      type: "continuous"
+      min: -2.0
+      max: 5.0
+      description: "Annualized Sharpe ratio"
+    - name: "sortino_ratio"
+      type: "continuous"
+      min: -2.0
+      max: 5.0
+      description: "Annualized Sortino ratio"
+    - name: "total_return"
+      type: "continuous"
+      min: -1.0
+      max: 3.0
+      description: "Total return (-100% to +300%)"
+  bins_per_dimension: 16  # Optimal from ablation study
+  update_rule: "score_based"  # Replace if new strategy has higher score
+
+islands:
+  num_islands: 9  # 8 strategy categories + 1 buy-and-hold benchmark
+  topology: "ring"  # Ring topology for migration
+  migration_rate: 0.1  # Top 10% migrate to neighbors
+  seed_strategies:
+    - "momentum"
+    - "mean_reversion"
+    - "breakout"
+    - "trend_following"
+    - "volatility_breakout"
+    - "spread_trading"
+    - "calendar_effects"
+    - "volume_profile"
+    - "buy_and_hold"  # Benchmark island
+
+cousin_selection:
+  num_best_cousins: 2  # Top performers
+  num_diverse_cousins: 3  # Perturbed feature vectors
+  num_random_cousins: 2  # Uniform random samples
+  total_cousins: 7
+  perturbation_sigma: 1.0  # Standard deviation for continuous dimensions
+  bit_flip_ratio: 0.25  # k_bf = n/4 for category dimension
+
+backtesting:
+  engine: "zipline-reloaded"
+  frequency: "daily"
+  commission:
+    model: "PerShare"
+    cost: 0.0075  # $0.0075 per share/contract
+    min_trade_cost: 1.0  # Minimum $1.00 per trade
+  slippage:
+    model: "VolumeShareSlippage"
+    volume_limit: 0.025  # Max 2.5% of daily volume
+    price_impact: 0.1  # Quadratic impact coefficient
+  capital_base: 1000000  # $1M initial capital (futures require more margin)
+  margin_requirements:
+    ES: 12000  # Approximate margin per ES contract
+    NQ: 18000  # Approximate margin per NQ contract
+  max_leverage: 5.0  # Maximum leverage ratio
+  position_limits:
+    ES: 10  # Maximum ES contracts
+    NQ: 10  # Maximum NQ contracts
+
+risk_constraints:
+  max_position_size: 0.3  # Max 30% of portfolio in single position
+  max_gross_exposure: 1.5  # Max 150% gross exposure (with leverage)
+  max_net_exposure: 1.0  # Max 100% net exposure
+  max_turnover: 0.5  # Max 50% daily turnover
+  max_daily_loss: 0.05  # Stop trading if 5% daily loss
+  max_drawdown_limit: -0.20  # Stop if 20% drawdown reached
+
+llm:
+  fast_agent:
+    model: "Qwen3-30B-A3B-Instruct-2507"
+    temperature: 0.7
+    top_p: 0.9
+    max_tokens: 2048
+    use_for:
+      - "data_analysis"
+      - "code_generation"
+      - "debugging"
+  reasoning_agent:
+    model: "Qwen3-Next-80B-A3B-Instruct"
+    temperature: 0.5
+    top_p: 0.95
+    max_tokens: 4096
+    use_for:
+      - "hypothesis_generation"
+      - "strategy_evaluation"
+      - "insight_extraction"
+
+validation_targets:
+  test_set:
+    sharpe_ratio_min: 0.9  # Target SR >= 1.0
+    total_return_min: 0.35  # Target return >= 35%
+    max_drawdown_max: -0.16  # MDD > -16%
+    information_ratio_min: 0.5
+    sortino_ratio_min: 1.0
+  outperforms_baselines:
+    - "buy_and_hold_ES"
+    - "buy_and_hold_NQ"
+    - "equal_weight_futures"
+    - "momentum_futures"
+
+output:
+  save_feature_maps: true
+  save_strategies: true
+  save_metrics: true
+  save_insights: true
+  visualization_format: "png"
+  checkpoint_format: "pickle"
+
+logging:
+  level: "INFO"
+  log_to_file: true
+  log_directory: "results/logs/"
+  log_generations: true
+  log_migrations: true
+  log_backtest_errors: true

@@ -1,0 +1,108 @@
+# QuantEvolve Default Configuration
+# Core hyperparameters for the multi-agent evolutionary framework
+
+# Evolutionary Algorithm Parameters
+evolution:
+  generations: 150                    # Total generations (G)
+  migration_interval: 10              # Migration every M generations
+  insight_curation_interval: 50       # Curate insights every K generations
+  alpha: 0.5                          # Parent selection balance (exploitation vs exploration)
+  
+# Feature Map Configuration
+feature_map:
+  dimensions: 6                       # Total feature dimensions
+  bins_per_dimension: 16              # Optimal bin size from ablation study
+  dimensions_list:
+    - name: strategy_category         # Binary encoding (8-bit)
+      type: categorical
+      encoding: binary
+      bit_length: 8
+      categories:
+        - momentum
+        - mean_reversion
+        - trend_following
+        - breakout
+        - statistical_arbitrage
+        - volatility
+        - machine_learning
+        - hybrid
+    - name: trading_frequency
+      type: continuous
+      min: 1                          # Daily
+      max: 252                        # Yearly
+    - name: max_drawdown
+      type: continuous
+      min: -1.0                       # -100%
+      max: 0.0                        # 0%
+    - name: sharpe_ratio
+      type: continuous
+      min: -3.0
+      max: 5.0
+    - name: sortino_ratio
+      type: continuous
+      min: -3.0
+      max: 5.0
+    - name: total_return
+      type: continuous
+      min: -1.0                       # -100%
+      max: 10.0                       # 1000%
+
+# Island Model Configuration
+islands:
+  num_islands: 9                      # C categories (8) + buy-and-hold (1)
+  migration_percentage: 0.1           # Top 10% migrate
+  topology: ring                      # Ring topology for migration
+
+# Cousin Selection Configuration (Eq 2)
+cousin_selection:
+  num_best_cousins: 2                 # Top performers
+  num_diverse_cousins: 3              # Perturbed feature vectors
+  num_random_cousins: 2               # Uniform samples
+  total_cousins: 7                    # Total cousins per parent
+  perturbation_sigma: 1.0             # σ_d for continuous dimensions
+  bit_flip_ratio: 0.25                # k_bf = n/4 for category dimension
+
+# Backtesting Configuration
+backtesting:
+  frequency: daily                    # Daily bars
+  commission_per_share: 0.0075        # $0.0075 per share
+  min_commission: 1.0                 # Minimum $1.00 per trade
+  slippage_model: volume_share        # VolumeShareSlippage
+  risk_free_rate: 0.0                 # For Sharpe/Sortino calculation
+  
+# Data Configuration
+data:
+  train_ratio: 0.625                  # ~5 years of 8 years total
+  validation_ratio: 0.25              # ~2 years
+  test_ratio: 0.125                   # ~1-3 years depending on dataset
+  
+# LLM Configuration
+llm:
+  fast_model: qwen3-30b               # Data Agent, Coding Team
+  reasoning_model: qwen3-80b          # Research Agent, Evaluation Team
+  temperature: 0.7                    # Balance creativity/consistency
+  top_p: 0.9                          # Nucleus sampling
+  max_tokens: 4096                    # Max response length
+  max_iterations: 3                   # Max code refinement iterations
+  
+# Insight Repository Configuration
+insights:
+  max_size: 500                       # Keep top 500 unique insights
+  curation_interval: 50               # Curate every K generations
+  
+# Checkpoint Configuration
+checkpoint:
+  save_interval: 10                   # Save every 10 generations
+  save_feature_map: true
+  save_strategies: true
+  save_metrics: true
+  
+# Logging Configuration
+logging:
+  level: INFO
+  save_to_file: true
+  log_directory: results/logs
+  log_hypothesis: true
+  log_code: true
+  log_metrics: true
+  log_insights: true
